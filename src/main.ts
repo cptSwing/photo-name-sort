@@ -1,11 +1,9 @@
 import { readdir, writeFile, copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
-
 import { ExifTool } from 'exiftool-vendored';
 import guessBestDate from './guessBestDate.ts';
 
-const readDir = 'tests';
-const writeDir = 'results';
+const [readDir, writeDir] = process.argv.slice(2);
 
 const exiftool = new ExifTool({
     // geolocation: true,

@@ -1,6 +1,6 @@
 # photo-name-sort
 
-`yarn node src/main.ts`
+`yarn node src/main.ts <srcDir> <dstDir>`
 
 ## Prep VSCode for modern Yarn version
 
