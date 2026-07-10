@@ -1,43 +1,54 @@
 import { readdir, writeFile, copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ExifTool } from 'exiftool-vendored';
+import { ExifDateTime, ExifTool } from 'exiftool-vendored';
 import guessBestDate from './guessBestDate.ts';
+import writeMetadata from './writeMetadata.ts';
 
-const [readDir, writeDir] = process.argv.slice(2);
+const [srcDir, dstDir] = process.argv.slice(2);
 
-const exiftool = new ExifTool({
-    // geolocation: true,
-    // keepUTCTime: false,
-});
+const exifTool = new ExifTool();
 
 try {
     // const photoDates = [];
 
-    const files = await readdir(readDir);
-    for (const fileName of files) {
-        const srcFullPath = join(readDir, fileName);
-        const bestDate = await guessBestDate(exiftool, srcFullPath, fileName);
+    const files = await readdir(srcDir);
+    for (const srcFileName of files) {
+        const srcFullPath = join(srcDir, srcFileName);
+        const bestDateData = await guessBestDate(exifTool, srcFullPath, srcFileName);
 
-        const newFileName = dateToStringName(bestDate.date, fileName);
-        const dstFullPath = join(writeDir, newFileName);
+        const { dstFileName, utcDateTime } = utcDateToName(srcFileName, bestDateData.date);
+        const dstFullPath = join(dstDir, dstFileName);
+
         await copyFile(srcFullPath, dstFullPath);
-        // photoDates.push(bestDate);
+        await writeMetadata(exifTool, dstFullPath, utcDateTime, bestDateData);
+
+        // photoDates.push(utcDateTime);
     }
 
-    // await writeFile('results/photoDates.json', JSON.stringify(photoDates, null, '\t'));
+    // await writeFile(`${dstDir}/photoDates.json`, JSON.stringify(photoDates, null, '\t'));
 } catch (err) {
     console.error('Error caught!', err);
 } finally {
-    await exiftool.end();
+    await exifTool.end();
 }
 
-function dateToStringName(date: Date, oldFileName: string) {
-    const year = date.getUTCFullYear();
-    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    const day = date.getUTCDate().toString().padStart(2, '0');
-    const hours = date.getUTCHours().toString().padStart(2, '0');
-    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-    const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+function utcDateToName(srcFileName: string, date: ExifDateTime) {
+    let exifDateTimeUTC = date;
 
-    return `${year}-${month}-${day}-${hours}-${minutes}-${seconds}.${oldFileName.split('.').pop()}`;
+    if (date.zone !== 'UTC') {
+        const adjusted = date.setZone('UTC');
+        if (!adjusted) throw new Error(`utcDateToName() failed on date.setZone('UTC')!`);
+        exifDateTimeUTC = adjusted;
+    }
+
+    const year = exifDateTimeUTC.year;
+    const month = exifDateTimeUTC.month.toString().padStart(2, '0');
+    const day = exifDateTimeUTC.day.toString().padStart(2, '0');
+    const hour = exifDateTimeUTC.hour.toString().padStart(2, '0');
+    const minute = exifDateTimeUTC.minute.toString().padStart(2, '0');
+    const second = exifDateTimeUTC.second.toString().padStart(2, '0');
+    const fileAssociation = srcFileName.split('.').pop()?.toLowerCase() ?? 'jpg';
+
+    const dstFileName = `${year}_${month}_${day}-${hour}_${minute}_${second}_UTC.${fileAssociation}`;
+    return { dstFileName, utcDateTime: exifDateTimeUTC };
 }
